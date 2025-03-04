@@ -1,0 +1,43 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cloud-demo-order
+spec:
+  replicas: 1  # 设置副本数量（可以根据需要调整）
+  selector:
+    matchLabels:
+      app: cloud-demo-order
+  template:
+    metadata:
+      labels:
+        app: cloud-demo-order
+    spec:
+      containers:
+        - name: cloud-demo-order
+          image: cloud-demo-order:v1.0
+          ports:
+            - containerPort: 7100
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "500m"
+            limits:
+              memory: "1024Mi"
+              cpu: "1000m"
+#          env:  # 如果需要环境变量，可以在这里添加
+#            - name: SPRING_PROFILES_ACTIVE
+#              value: "prod"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: cloud-demo-order
+spec:
+  selector:
+    app: cloud-demo-order
+  ports:
+    - protocol: TCP
+      port: 7100
+      targetPort: 7100
+  type: ClusterIP
+

@@ -1,0 +1,49 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cloud-demo-user
+spec:
+  replicas: 1  # 设置副本数量（可以根据需要调整）
+  # minReadySeconds: 120 #等待多长时间执行下一轮更新
+  strategy:
+    rollingUpdate:
+      maxSurge: 1 #升级过程中激增Pod的最大数量
+      maxUnavailable: 0 #升级过程中不可用Pod的最大数量
+    type: RollingUpdate
+  selector:
+    matchLabels:
+      app: cloud-demo-user
+  template:
+    metadata:
+      labels:
+        app: cloud-demo-user
+    spec:
+      containers:
+        - name: cloud-demo-user
+          image: cloud-demo-user:v1.0
+          ports:
+            - containerPort: 7200
+          resources:
+            requests:
+              memory: "512Mi"
+              cpu: "250m"
+            limits:
+              memory: "1024Mi"
+              cpu: "500m"
+#          env:  # 如果需要环境变量，可以在这里添加
+#            - name: SPRING_PROFILES_ACTIVE
+#              value: "prod"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: cloud-demo-user
+spec:
+  selector:
+    app: cloud-demo-user
+  ports:
+    - protocol: TCP
+      port: 7200
+      targetPort: 7200
+  type: ClusterIP
+

@@ -1,0 +1,19 @@
+server:
+  port: 7201
+
+spring:
+  main:
+    allow-bean-definition-overriding: true
+  application:
+    name: user-app
+  cloud:
+    nacos:
+      discovery:
+        namespace: dbe5bb62-0a27-4163-acf7-b2e709623cfb
+      config:
+        namespace: dbe5bb62-0a27-4163-acf7-b2e709623cfb
+        file-extension: yaml
+        shared-configs:
+          - data-id: common-config.yaml
+            refresh: true
+      server-addr: 192.168.222.1:8848

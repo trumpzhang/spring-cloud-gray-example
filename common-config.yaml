@@ -1,0 +1,20 @@
+kerwin:
+  tool:
+    gray:
+      load: true
+      version:
+        prod-version: V1
+        gray-version: V2
+
+      gateway:
+        enabled: false
+        grayHeadKey: gray
+        grayHeadValue: gray-996
+
+## 配置Ribbon调用user-app和order-app服务时使用我们自定义灰度轮询算法
+user-app:
+  ribbon:
+    NFLoadBalancerRuleClassName: com.kerwin.gray.loadbalancer.GrayRoundRobinRule
+order-app:
+  ribbon:
+    NFLoadBalancerRuleClassName: com.kerwin.gray.loadbalancer.GrayRoundRobinRule
