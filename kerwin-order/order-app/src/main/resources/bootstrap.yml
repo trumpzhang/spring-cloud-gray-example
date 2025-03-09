@@ -18,4 +18,16 @@ spring:
           - data-id: common-config.yaml
             refresh: true
 
+management:
+  endpoints:
+    web:
+      exposure:
+        include: ["prometheus","health"]
+  metrics:
+    tags:
+      application: BookManager
+      percentiles-histogram:
+        http:
+          server:
+            requests: true
 

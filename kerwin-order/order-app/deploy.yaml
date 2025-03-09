@@ -2,6 +2,8 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: cloud-demo-order
+  labels:
+    app: cloud-demo-order
 spec:
   replicas: 1  # 设置副本数量（可以根据需要调整）
   selector:
@@ -32,12 +34,37 @@ apiVersion: v1
 kind: Service
 metadata:
   name: cloud-demo-order
+  labels:
+    app: cloud-demo-order
+    release: prometheus    # 添加标签以便ServiceMonitor选择
 spec:
   selector:
     app: cloud-demo-order
   ports:
-    - protocol: TCP
+    - name: web    # 端口名称保持不变
       port: 7100
       targetPort: 7100
   type: ClusterIP
+
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: order-monitor
+  namespace: default
+  labels:
+    release: prometheus    # 添加与Prometheus Operator配置相匹配的标签
+spec:
+  selector:
+    matchLabels:
+      app: cloud-demo-order
+      release: prometheus  # 匹配Service的标签
+  endpoints:
+    - interval: 2s
+      port: web
+      path: /actuator/prometheus
+      scheme: http          # 明确指定协议
+  namespaceSelector:
+    matchNames:
+      - default
 

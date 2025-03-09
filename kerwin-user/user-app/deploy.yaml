@@ -2,6 +2,8 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: cloud-demo-user
+  labels:
+    app: cloud-demo-user
 spec:
   replicas: 1  # 设置副本数量（可以根据需要调整）
   # minReadySeconds: 120 #等待多长时间执行下一轮更新
@@ -21,6 +23,7 @@ spec:
       containers:
         - name: cloud-demo-user
           image: cloud-demo-user:v1.0
+          command: ["java", "-Dserver.port=7200", "-jar", "user-app-1.0-SNAPSHOT.jar"]
           ports:
             - containerPort: 7200
           resources:
@@ -38,12 +41,56 @@ apiVersion: v1
 kind: Service
 metadata:
   name: cloud-demo-user
+  labels:
+    app: cloud-demo-user
+    release: prometheus
 spec:
   selector:
     app: cloud-demo-user
   ports:
-    - protocol: TCP
+    - name: web
       port: 7200
       targetPort: 7200
   type: ClusterIP
 
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: user-monitor
+  namespace: default
+  labels:
+    release: prometheus    # 添加与Prometheus Operator配置相匹配的标签
+spec:
+  selector:
+    matchLabels:
+      app: cloud-demo-user
+      release: prometheus  # 匹配Service的标签
+  endpoints:
+    - interval: 2s
+      port: web
+      path: /actuator/prometheus
+      scheme: http
+  namespaceSelector:
+    matchNames:
+      - default
+
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: cloud-demo-user-hpa
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: cloud-demo-user
+  minReplicas: 1
+  maxReplicas: 5
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 80

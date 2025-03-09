@@ -17,3 +17,16 @@ spring:
           - data-id: common-config.yaml
             refresh: true
       server-addr: 192.168.222.1:8848
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: ["prometheus","health"]
+  metrics:
+    tags:
+      application: BookManager
+      percentiles-histogram:
+        http:
+          server:
+            requests: true
