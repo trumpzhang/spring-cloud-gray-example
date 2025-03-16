@@ -18,9 +18,9 @@ management:
           server:
             requests: true
 
-xxljob:
-  addresses: http://127.0.0.1:8080/xxl-job-admin
-  accessToken: ""
-  appName: ${spring.application.name}
-  port: 7500
-  logPath: /data/applogs/xxl-job/job-handler
+#xxljob:
+#  addresses: http://192.168.222.1:8080/xxl-job-admin
+#  accessToken: ""
+#  appName: ${spring.application.name}
+#  port: 7500
+#  logPath: /data/applogs/xxl-job/job-handler

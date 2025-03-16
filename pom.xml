@@ -13,7 +13,7 @@
         <module>kerwin-common</module>
         <module>kerwin-user</module>
         <module>kerwin-order</module>
-<!--        <module>kerwin-starter</module>-->
+        <module>kerwin-starter</module>
     </modules>
 
     <parent>

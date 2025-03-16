@@ -1,7 +1,6 @@
 package com.kerwin.user.controller;
 
 import com.kerwin.common.api.ApiResult;
-import com.kerwin.common.constants.Utils;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -26,14 +25,12 @@ public class UserController {
     private static final Map<String, String> userMap = new HashMap();
     static {
         userMap.put("U0001", "用户1号");
-        userMap.put("U0002", "用户2号");
-        userMap.put("U0003", "用户3号");
     }
 
     @GetMapping("/{userNo}")
     public ApiResult<String> getUserName(@PathVariable("userNo") String userNo, HttpServletRequest request) {
         // 打印请求头
-        System.out.println("请求头信息：");
+        System.out.println("请求头信息：=============");
         Enumeration<String> headerNames = request.getHeaderNames();
         while (headerNames.hasMoreElements()) {
             String headerName = headerNames.nextElement();
@@ -41,7 +38,7 @@ public class UserController {
             System.out.println(headerName + ": " + headerValue);
         }
 
-        return ApiResult.success(userMap.get(userNo) + " - port=" + port + " - mateVersion=" + Utils.CURRENT_VERSION());
+        return ApiResult.success(userMap.get(userNo) + " - port=" + port + " - Version=" + System.getenv("version"));
     }
 
     @GetMapping("/cpu/stress")

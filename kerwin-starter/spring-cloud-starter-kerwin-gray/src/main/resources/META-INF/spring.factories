@@ -1,2 +1,2 @@
 org.springframework.boot.autoconfigure.EnableAutoConfiguration=\
-  com.kerwin.gray.config.GrayAutoConfiguration
+  com.kerwin.gray.interceptor.GrayAutoConfiguration
