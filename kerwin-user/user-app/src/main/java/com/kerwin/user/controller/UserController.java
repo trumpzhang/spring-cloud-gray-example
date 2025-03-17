@@ -41,18 +41,4 @@ public class UserController {
         return ApiResult.success(userMap.get(userNo) + " - port=" + port + " - Version=" + System.getenv("version"));
     }
 
-    @GetMapping("/cpu/stress")
-    public ApiResult<String> cpuStress() {
-        long startTime = System.currentTimeMillis();
-        // 执行密集计算
-        double result = 0;
-        for (int i = 0; i < 100000; i++) {
-            result += Math.sqrt(Math.pow(i, 3)) * Math.sin(i) * Math.cos(i);
-            for (int j = 0; j < 100; j++) {
-                result += Math.sqrt(Math.pow(j, 2)) * Math.sin(j) * Math.cos(j);
-            }
-        }
-        long endTime = System.currentTimeMillis();
-        return ApiResult.success("CPU压力测试完成，耗时: " + (endTime - startTime) + "ms, 计算结果: " + result);
-    }
 }
