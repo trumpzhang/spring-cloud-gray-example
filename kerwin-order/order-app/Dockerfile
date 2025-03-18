@@ -12,4 +12,4 @@ RUN ln -sf /usr/share/zoneinfo/Asia/Shanghai /etc/localtime && echo $TZ >/etc/ti
 WORKDIR /opt
 COPY order-app-1.0-SNAPSHOT.jar .
 
-ENTRYPOINT java -jar order-app-1.0-SNAPSHOT.jar
+ENTRYPOINT java ${JAVA_OPTS} -jar order-app-1.0-SNAPSHOT.jar

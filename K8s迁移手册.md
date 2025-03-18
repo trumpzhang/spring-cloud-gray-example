@@ -198,13 +198,13 @@ metadata:
   namespace: spring-apps
   labels:
     app: spring-service
-    version: ${IMAGE_TAG}
+    version: ${TAG}
 spec:
   replicas: 2
   selector:
     matchLabels:
       app: spring-service
-      version: ${IMAGE_TAG}
+      version: ${TAG}
   strategy:
     type: RollingUpdate
     rollingUpdate:
@@ -214,11 +214,11 @@ spec:
     metadata:
       labels:
         app: spring-service
-        version: ${IMAGE_TAG}
+        version: ${TAG}
     spec:
       containers:
       - name: spring-service
-        image: registry.example.com/spring-service:${IMAGE_TAG}
+        image: registry.example.com/spring-service:${TAG}
         imagePullPolicy: IfNotPresent
         ports:
         - containerPort: 8080
@@ -229,7 +229,7 @@ spec:
         - name: TZ
           value: "Asia/Shanghai"
         - name: version
-          value: "${IMAGE_TAG}"
+          value: "${TAG}"
         resources:
           requests:
             memory: "512Mi"
@@ -271,6 +271,14 @@ spec:
       - name: config-volume
         configMap:
           name: spring-service-config
+```
+关于resources中request、limit设置的最佳实践，参考腾讯云提供的一个设置规则：
+
+在启动时设置JAVA_OPTS = -XX:+UseContainerSupport -XX:MaxRAMPercentage=75.0
+
+```sh
+Request >= 1.25 * JVM 最大堆内存 ；
+Limit >= 2 * JVM 最大堆内存；
 ```
 
 #### 2.3 Service配置模板
@@ -344,8 +352,8 @@ spec:
   http:
     - match:
       - headers:
-          user:
-            exact: "jack"
+          uid:
+            exact: "1"
       route:
       - destination:
             host: order  # 目标 Service 的名称
@@ -395,14 +403,9 @@ pipeline {
             }
         }
         
-        stage('Docker Build') {
+        stage('Docker Build & Push') {
             steps {
                 sh "docker build -t ${DOCKER_REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG} ."
-            }
-        }
-        
-        stage('Docker Push') {
-            steps {
                 sh "docker push ${DOCKER_REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}"
             }
         }
@@ -410,22 +413,36 @@ pipeline {
         /* 测试环境直接滚动 */
         stage('Deploy to K8s') {
             steps {
-                sh "kubectl --kubeconfig=${KUBE_CONFIG} set image deployment/spring-service spring-service=${DOCKER_REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG} -n spring-apps"
+                sh "kubectl --kubeconfig=${KUBE_CONFIG} set image deployment/spring-service spring-service=${DOCKER_REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG} -n test"
             }
         }
 
-        /* 生产环境金丝雀方式 */
-        stage('Update Yaml & Deploy') {
+        /* 生产环境金丝雀方式，创建新的Deployment */
+        stage('Create Deployment') {
             steps {
-                sh "sed -i 's/\${IMAGE_TAG}/${IMAGE_TAG}/g' k8s.yaml"
-                // sh "sed -i 's//${env.BRANCH_NAME}/' k8s.yaml"
-                sh "kubectl apply -f k8s.yaml"
+                sh "sed -i 's/\${TAG}/${IMAGE_TAG}/g' Deployment.yaml"
+                // sh "sed -i 's//${env.BRANCH_NAME}/' Deployment.yaml"
+                sh "kubectl apply -f Deployment.yaml"
             }
         }
-
-        /* 自动更新DestinationRule，加入新版本说明 */
-        /* 自动更新VirtureService，更新灰度版本标识 destination.subset */
-        /* 研发手动切量 */
+        
+        /* 创建新的DestinationRule标识新版本 */
+        stage('Create New DestinationRule') {
+            steps {
+                sh "sed -i 's/\${TAG}/${IMAGE_TAG}/g' dest-rule.yaml"
+                sh "kubectl apply -f dest-rule.yaml"
+            }
+        }
+        
+        /* 更新VirtureService，更新灰度版本标识 destination.subset */
+        stage('Update VirtureService') {
+            steps {
+                sh "sed -i 's/\${TAG}/${IMAGE_TAG}/g' VirtureService.yaml"
+                sh "kubectl apply -f VirtureService.yaml"
+            }
+        }
+        
+        /* 研发在kiali进行流量染色和手动切量 */
 
     }
     

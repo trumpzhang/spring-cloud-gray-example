@@ -1,0 +1,16 @@
+apiVersion: networking.istio.io/v1alpha3
+kind: Gateway
+metadata:
+  name: order-gateway
+  namespace: default
+spec:
+  selector:
+    istio: ingressgateway  # 确保与 Istio Ingress Gateway 的标签匹配
+  servers:
+    - port:
+        number: 80
+        name: http
+        protocol: HTTP
+      hosts:
+        - "*"  # 替换为你希望访问的域名
+

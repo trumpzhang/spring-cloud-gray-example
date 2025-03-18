@@ -18,7 +18,8 @@ import java.lang.management.MemoryUsage;
 public class OrderApplication {
     public static void main(String[] args) {
         SpringApplication.run(OrderApplication.class);
-        // 获取当前进程的Xmx
+
+        // 获取当前JVM进程的Xmx
         MemoryMXBean memoryMXBean = ManagementFactory.getMemoryMXBean();
         long maxHeapSize = memoryMXBean.getHeapMemoryUsage().getMax() / 1024 / 1024;
         // 获取当前主机的物理总内存
@@ -26,7 +27,7 @@ public class OrderApplication {
         // 获取总物理内存（字节）
         long totalPhysicalMemorySize = osBean.getTotalPhysicalMemorySize();
 
-        // 转换为更易读的单位
+        // 转换单位
         long totalMemoryGB = totalPhysicalMemorySize / 1024 / 1024 / 1024;
         long totalMemoryMB = totalPhysicalMemorySize / 1024 / 1024;
 
