@@ -1,50 +1,100 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: cloud-demo-order
+  name: order-v1
   labels:
-    app: cloud-demo-order
+    app: order
+    version: v1
 spec:
   replicas: 1  # 设置副本数量（可以根据需要调整）
   selector:
     matchLabels:
-      app: cloud-demo-order
+      app: order
+      version: v1
   template:
     metadata:
       labels:
-        app: cloud-demo-order
+        app: order
+        version: v1
     spec:
+      nodeSelector:
+        kubernetes.io/hostname: master-57.10
       containers:
         - name: cloud-demo-order
           image: cloud-demo-order:v1.0
+          command: ["/bin/sh", "-c"]
+          args: ["java ${JAVA_OPTS} -Dserver.port=7100 -Dlogging.file.name=./logs/order-app.log -jar order-app-1.0-SNAPSHOT.jar"]
           ports:
             - containerPort: 7100
           resources:
             requests:
-              memory: "256Mi"
+              memory: "1024Mi"
               cpu: "500m"
             limits:
-              memory: "1024Mi"
+              memory: "2048Mi"
               cpu: "1000m"
-#          env:  # 如果需要环境变量，可以在这里添加
-#            - name: SPRING_PROFILES_ACTIVE
-#              value: "prod"
+          env:  # 如果需要环境变量，可以在这里添加
+            - name: JAVA_OPTS
+              value: -XX:+UseContainerSupport -XX:MaxRAMPercentage=75.0
+            - name: version
+              value: "v1"
+          # 启动探针配置
+          startupProbe:
+            httpGet:
+              path: /actuator/health
+              port: 7100
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 10
+          # 就绪探针配置
+          readinessProbe:
+            httpGet:
+              path: /actuator/health/readiness
+              port: 7100
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          # 存活探针配置
+          livenessProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: 7100
+            initialDelaySeconds: 3
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+            terminationGracePeriodSeconds: 3 # 优雅关闭，默认宽限时间30s
+          volumeMounts:
+            - name: log-volume
+              mountPath: /opt/logs  # Pod 中的日志目录
+              readOnly: false
+      volumes:
+        - name: log-volume
+          hostPath:  # 定义 hostPath 卷
+            path: /var/log/order  # 宿主机的日志目录
+            type: DirectoryOrCreate  # 如果目录不存在，自动创建
 ---
 apiVersion: v1
 kind: Service
 metadata:
-  name: cloud-demo-order
+  name: order
   labels:
-    app: cloud-demo-order
-    release: prometheus    # 添加标签以便ServiceMonitor选择
+    app: order
+    #release: prometheus    # 添加标签以便ServiceMonitor选择
 spec:
   selector:
-    app: cloud-demo-order
+    app: order
   ports:
     - name: web    # 端口名称保持不变
       port: 7100
       targetPort: 7100
+      #nodePort: 31000
   type: ClusterIP
+
+
+
+
 
 ---
 apiVersion: monitoring.coreos.com/v1
