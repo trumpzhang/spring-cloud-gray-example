@@ -3,19 +3,15 @@ kind: ServiceMonitor
 metadata:
   name: order-monitor
   namespace: default
-  labels:
-    release: prometheus    # 添加与Prometheus Operator配置相匹配的标签
 spec:
   selector:
     matchLabels:
-      app: cloud-demo-order
-      release: prometheus  # 匹配Service的标签
+      app: order
   endpoints:
-    - interval: 2s
+    - interval: 5s
       port: web
       path: /actuator/prometheus
-      scheme: http          # 明确指定协议
+      scheme: http          # 指定协议
   namespaceSelector:
     matchNames:
       - default
-
