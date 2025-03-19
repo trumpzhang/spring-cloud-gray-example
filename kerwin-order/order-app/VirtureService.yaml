@@ -11,23 +11,22 @@ spec:
   http:
     - match:
         - headers:
-            user:
-              exact: "jack"
+            uid:
+              exact: "1"
       route:
         - destination:
             host: order  # 目标 Service 的名称
-            subset: v2
+            subset: ${version}
     - route:
         - destination:
             host: order
             subset: v1
-          weight: 50
+          weight: 100
         - destination:
             host: order
             subset: v2
-          weight: 50
+          weight: 0
           headers:
             request:
               set:
                 x-canary-version: "true"
-

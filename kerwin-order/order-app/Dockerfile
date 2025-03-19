@@ -10,6 +10,6 @@ RUN ln -sf /usr/share/zoneinfo/Asia/Shanghai /etc/localtime && echo $TZ >/etc/ti
 #	rm -rf /var/cache/apk/*
 
 WORKDIR /opt
-COPY order-app-1.0-SNAPSHOT.jar .
+COPY ./target/order-app-1.0-SNAPSHOT.jar .
 
 ENTRYPOINT java ${JAVA_OPTS} -jar order-app-1.0-SNAPSHOT.jar
