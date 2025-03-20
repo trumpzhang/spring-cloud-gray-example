@@ -75,8 +75,9 @@
 - 6.1 日志收集
   - 容器日志收集方案
   - EFK/ELK方案集成
+    - 以Daemonset部署Filebeat，收集本机 /var/log/containers
 - 6.2 监控指标
-  - Prometheus集成
+  - Prometheus集成（创建ServiceMonitor资源，安装Prometheus Operator自动采集pod指标）
   - 自定义指标暴露
 - 6.3 链路追踪
   - Skywalking/Jaeger集成
@@ -85,9 +86,78 @@
 - 7.1 持续集成
   - 代码构建
   - 镜像构建与推送
+  
 - 7.2 持续部署
-  - 金丝雀部署策略
-  - 回滚机制
+  - 金丝雀部署策略（基于服务网格）
+  
+    - 流量染色（在VirtureService添加染色逻辑）
+      ```yaml
+      - route:
+        - destination:
+            host: order
+            subset: v1
+          weight: 90
+        - destination:
+            host: order
+            subset: v2
+          weight: 10
+          # 对v2版本的流量染色
+          headers:
+            request:
+              set:
+                x-canary-version: "true"
+          
+      ```
+  
+    - 流量路由
+      ```yaml
+      apiVersion: networking.istio.io/v1alpha3
+      kind: DestinationRule
+      metadata:
+        name: order
+      spec:
+        host: "*"
+        subsets:
+        - name: v1
+          labels:
+            version: v1
+        - name: v2
+          labels:
+            version: v2
+      ```
+  
+    - 标签透传
+      
+      ```java
+      import feign.RequestInterceptor;
+      import feign.RequestTemplate;
+      /**
+       * 灰度发布Feign请求拦截器
+       * 用于透传灰度标记
+       */
+      public class GrayFeignRequestInterceptor implements RequestInterceptor {
+          // Canary版本请求头
+          private static final String CANARY_VERSION_HEADER = "x-canary-version";
+      
+          @Override
+          public void apply(RequestTemplate template) {
+              // 检查当前请求中是否有 x-canary-version 请求头，如果有将灰度标记通过Header传递下去
+              ServletRequestAttributes requestAttributes = (ServletRequestAttributes) RequestContextHolder
+                      .getRequestAttributes();
+              if (requestAttributes != null) {
+                  HttpServletRequest request = requestAttributes.getRequest();
+                  // 检查并传递x-canary-version请求头
+                  String canaryVersion = request.getHeader(CANARY_VERSION_HEADER);
+                  if (canaryVersion != null && !canaryVersion.isEmpty()) {
+                      template.header(CANARY_VERSION_HEADER, canaryVersion);
+                  }
+              }
+          }
+      }
+  
+    
+  
+  - 回滚切量机制
 
 ## 8. 性能优化
 - 8.1 资源配置优化
@@ -101,22 +171,24 @@
   - 镜像精简
 
 ## 9. 迁移路线与策略
-- 9.1 渐进式迁移策略
-  - 双模式并行运行
-- 9.2 切换计划
+- 9.1 流量切换
   - 流量切换策略
   - 回滚预案
 - 9.3 团队技能培养
   - K8s技能培训
   - DevOps文化建设
 
+
+
 ## 附录
+
 - A. K8s常用命令参考
 - B. 常见问题(FAQ)
 - C. 配置模板示例
   - 1 Dockerfile模板
   - 2 Kubernetes资源配置模板
-  - 3 CI/CD配置模板
+  - 3 Istio资源配置模板
+  - 4 CI/CD配置模板
 - D. 参考资源与工具
 
 ## C. 配置模板示例
@@ -128,42 +200,42 @@
 ```dockerfile
 # 基础镜像选择
 FROM openjdk:8-jre-alpine
-# 工作目录
-WORKDIR /opt
-# 添加应用jar包
-COPY target/*.jar app.jar
-# 暴露端口
-EXPOSE 8080
-# 设置JVM参数
-ENV JAVA_OPTS="-XX:+UseG1GC -XX:+UseContainerSupport -XX:MaxRAMPercentage=75.0 -XX:+HeapDumpOnOutOfMemoryError -XX:HeapDumpPath=/app/logs/"
+
 # 设置时区
 ENV TZ=Asia/Shanghai \
     LANG=en_US.UTF-8
+#指定docker容器时区
+RUN ln -sf /usr/share/zoneinfo/Asia/Shanghai /etc/localtime && echo $TZ >/etc/timezone
+
+# 工作目录
+WORKDIR /opt
+# 添加应用jar包
+COPY target/xxx.jar .
+# 暴露端口
+EXPOSE 8080
+# 设置JVM参数
+ENV JAVA_OPTS="-XX:+UseG1GC -XX:+UseContainerSupport -XX:MaxRAMPercentage=75.0 -XX:+HeapDumpOnOutOfMemoryError -XX:HeapDumpPath=/opt/logs/"
+
 
 # 启动命令
-ENTRYPOINT java $JAVA_OPTS -jar app.jar
+ENTRYPOINT java $JAVA_OPTS -jar xxx.jar
 ```
 
 #### 1.2 Dockerfile最佳实践
 
 1. **使用适当的基础镜像**：
    - 生产环境推荐使用slim版本减小镜像体积
-   - 考虑使用官方的Eclipse Temurin或Amazon Corretto等JDK镜像
    - 考虑使用Alpine基础镜像（注意JVM兼容性问题）
-
 2. **优化JVM参数**：
    - 启用容器感知（`-XX:+UseContainerSupport`）
-   - 使用百分比设置内存（`-XX:MaxRAMPercentage=75.0`）,使用-Xms512m -Xmx1024m不是很优雅
+   - 使用百分比设置内存（`-XX:MaxRAMPercentage=75.0`）, 容器环境使用 -Xms512m -Xmx1024m等参数不是很优雅
    - 选择适合容器环境的GC（如G1GC）
-
 3. **安全性考虑**：
    - 使用非root用户运行应用
    - 移除不必要的工具和库
-   
 4. **其他最佳实践**：
-   - 添加健康检查
    - 设置适当的时区
-   - 使用LABEL添加元数据（维护者、版本等）
+   - 使用LABEL添加元数据（维护者、版本等信息）
 
 ### 2. Kubernetes资源配置模板
 
@@ -175,17 +247,24 @@ management:
   endpoints:
     web:
       exposure:
-        include: health,info,metrics
+        include: ["prometheus","health","info"]
   endpoint:
     health:
       show-details: always
       probes:
         enabled: true
   health:
-    livenessState:
+    livenessstate:
       enabled: true
-    readinessState:
+    readinessstate:
       enabled: true
+  metrics:
+    tags:
+      application: ${spring.application.name}
+      percentiles-histogram:
+        http:
+          server:
+            requests: true
 ```
 
 #### 2.2 Deployment配置模板
@@ -194,85 +273,74 @@ management:
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: spring-service
-  namespace: spring-apps
+  name: order-${version}
   labels:
-    app: spring-service
-    version: ${TAG}
+    app: order
+    version: "${version}"
 spec:
-  replicas: 2
+  replicas: 1  # 设置副本数量（可以根据需要调整）
   selector:
     matchLabels:
-      app: spring-service
-      version: ${TAG}
-  strategy:
-    type: RollingUpdate
-    rollingUpdate:
-      maxSurge: 1
-      maxUnavailable: 0
+      app: order
+      version: "${version}"
   template:
     metadata:
       labels:
-        app: spring-service
-        version: ${TAG}
+        app: order
+        version: "${version}"
     spec:
+      nodeSelector:
+        kubernetes.io/hostname: master-57.10
       containers:
-      - name: spring-service
-        image: registry.example.com/spring-service:${TAG}
-        imagePullPolicy: IfNotPresent
-        ports:
-        - containerPort: 8080
-          name: http
-        env:
-        - name: SPRING_PROFILES_ACTIVE
-          value: "prod"
-        - name: TZ
-          value: "Asia/Shanghai"
-        - name: version
-          value: "${TAG}"
-        resources:
-          requests:
-            memory: "512Mi"
-            cpu: "200m"
-          limits:
-            memory: "1Gi"
-            cpu: "500m"
-        # 就绪探针配置
-        readinessProbe:
-          httpGet:
-            path: /actuator/health/readiness
-            port: 8080
-          initialDelaySeconds: 30
-          periodSeconds: 10
-          timeoutSeconds: 3
-          failureThreshold: 3
-        # 存活探针配置
-        livenessProbe:
-          httpGet:
-            path: /actuator/health/liveness
-            port: 8080
-          initialDelaySeconds: 60
-          periodSeconds: 20
-          timeoutSeconds: 3
-          failureThreshold: 3
-        # 启动探针配置
-        startupProbe:
-          httpGet:
-            path: /actuator/health
-            port: 8080
-          initialDelaySeconds: 15
-          periodSeconds: 10
-          timeoutSeconds: 3
-          failureThreshold: 12
-        volumeMounts:
-        - name: config-volume
-          mountPath: /opt/config
-      volumes:
-      - name: config-volume
-        configMap:
-          name: spring-service-config
+        - name: cloud-demo-order
+          image: cloud-demo-order:${version}
+          command: ["/bin/sh", "-c"]
+          args: ["java ${JAVA_OPTS} -Dserver.port=7100 -Dlogging.file.name=./logs/order-app.log -jar order-app-1.0-SNAPSHOT.jar"]
+          ports:
+            - containerPort: 7100
+          resources:
+            requests:
+              memory: "512Mi"
+              cpu: "300m"
+            limits:
+              memory: "1500Mi"
+              cpu: "500m"
+          env:  # 如果需要环境变量，可以在这里添加
+            - name: JAVA_OPTS
+              value: -XX:+UseContainerSupport -XX:MaxRAMPercentage=75.0
+            - name: version
+              value: "${version}"
+          # 启动探针配置
+          startupProbe:
+            httpGet:
+              path: /actuator/health
+              port: 7100
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 10
+          # 就绪探针配置
+          readinessProbe:
+            httpGet:
+              path: /actuator/health/readiness
+              port: 7100
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          # 存活探针配置
+          livenessProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: 7100
+            initialDelaySeconds: 3
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+            terminationGracePeriodSeconds: 3 # 优雅关闭，默认宽限时间30s
+
+
 ```
-关于resources中request、limit设置的最佳实践，参考腾讯云提供的一个设置规则：
+关于resources中request、limit设置的最佳实践，可以参考腾讯云提供的一个设置规则：
 
 在启动时设置JAVA_OPTS = -XX:+UseContainerSupport -XX:MaxRAMPercentage=75.0
 
@@ -287,17 +355,17 @@ Limit >= 2 * JVM 最大堆内存；
 apiVersion: v1
 kind: Service
 metadata:
-  name: spring-service
-  namespace: spring-apps
+  name: user
+  labels:
+    app: user
 spec:
   selector:
-    app: spring-service
+    app: user
   type: ClusterIP
   ports:
-  - port: 80
-    targetPort: 8080
-    protocol: TCP
-    name: http
+    - name: web
+      port: 7200
+      targetPort: 7200
 ```
 ### 3. Istio资源配置模板
 
@@ -317,7 +385,7 @@ spec:
         name: http
         protocol: HTTP
       hosts:
-        - "*"  # 替换为你希望访问的域名
+        - "*"  # 替换为你希望访问的客户端域名
 ```
 
 #### DestinationRule:
@@ -362,11 +430,12 @@ spec:
       - destination:
           host: order
           subset: v1
-        weight: 100
+        weight: 90
       - destination:
           host: order
           subset: v2
-        weight: 0
+        weight: 10
+        # 对v2版本的流量染色
         headers:
           request:
             set:
@@ -381,71 +450,96 @@ spec:
 ```groovy
 pipeline {
     agent any
-    
+
     environment {
-        DOCKER_REGISTRY = "registry.example.com"
-        IMAGE_NAME = "spring-service"
-        KUBE_CONFIG = credentials('kubeconfig')
+        DOCKER_REGISTRY = ""
+        IMAGE_NAME = "cloud-demo-order"
     }
 
-    
-    stages {
-        stage('Clone') {
-            git url: "https://github.com/willemswang/jenkins-demo.git"
-            script {
-                IMAGE_TAG = sh(returnStdout: true, script: 'git rev-parse --short HEAD').trim()
-            }
-        }
 
+    stages {
         stage('Build') {
             steps {
-                sh 'mvn clean package -DskipTests'
+                echo "开始打包阶段"
+                sh '''
+                #!/bin/bash
+                source /etc/profile
+                pwd && ls -la
+                mvn -v
+                mvn clean package -DskipTests -s $PWD/settings.xml
+                '''
+
+                script {
+                    env.COMMIT_ID = sh(returnStdout: true, script: 'git rev-parse --short HEAD').trim()
+                    echo "当前 Commit ID: ${env.COMMIT_ID}"
+                }
             }
+
         }
-        
-        stage('Docker Build & Push') {
+
+        stage('Build & Push Docker Image') {
             steps {
-                sh "docker build -t ${DOCKER_REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG} ."
-                sh "docker push ${DOCKER_REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}"
-            }
-        }
-        
-        /* 测试环境直接滚动 */
-        stage('Deploy to K8s') {
-            steps {
-                sh "kubectl --kubeconfig=${KUBE_CONFIG} set image deployment/spring-service spring-service=${DOCKER_REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG} -n test"
+                echo "开始构建镜像阶段"
+                dir('./kerwin-order/order-app') {
+                    sh 'ls -la'
+                    sh "docker build -t ${IMAGE_NAME}:${env.COMMIT_ID} ."
+                    // sh "docker push ${IMAGE_NAME}:${env.COMMIT_ID}"
+                }
             }
         }
 
-        /* 生产环境金丝雀方式，创建新的Deployment */
-        stage('Create Deployment') {
+        stage('Create New Deployment') {
             steps {
-                sh "sed -i 's/\${TAG}/${IMAGE_TAG}/g' Deployment.yaml"
-                // sh "sed -i 's//${env.BRANCH_NAME}/' Deployment.yaml"
-                sh "kubectl apply -f Deployment.yaml"
+                echo "开始创建新的Deployment"
+                dir('./kerwin-order/order-app') {
+                    sh "sed -i 's/\${version}/${env.COMMIT_ID}/g' deploy.yaml"
+                    echo '修改后的deploy.yaml内容：'
+                    sh 'cat deploy.yaml'
+                    sh 'kubectl apply -f deploy.yaml'
+                }
             }
         }
-        
-        /* 创建新的DestinationRule标识新版本 */
-        stage('Create New DestinationRule') {
+
+        stage('Update DestinationRule') {
             steps {
-                sh "sed -i 's/\${TAG}/${IMAGE_TAG}/g' dest-rule.yaml"
-                sh "kubectl apply -f dest-rule.yaml"
+                echo "更新Istio DestinationRule添加新版本子集: ${env.COMMIT_ID}"
+                script {
+                    // 检查子集是否存在
+                    def subsetExists = sh(
+                            script: "kubectl get destinationrule order -o jsonpath='{.spec.subsets[?(@.name==\"${env.COMMIT_ID}\")]}' | grep -q '${env.COMMIT_ID}'",
+                            returnStatus: true
+                    ) == 0
+
+                    if (!subsetExists) {
+                        // 准备patch内容
+                        def jsonContent = """
+                        [
+                          {
+                            "op": "add",
+                            "path": "/spec/subsets/-",
+                            "value": {
+                              "name": "${env.COMMIT_ID}",
+                              "labels": {
+                                "version": "${env.COMMIT_ID}"
+                              }
+                            }
+                          }
+                        ]
+                        """
+
+                        sh "echo '${jsonContent}' > patch-dr.json"
+                        sh "cat patch-dr.json"
+                        sh "kubectl patch destinationrule order --type=json --patch-file=patch-dr.json"
+                        echo "DestinationRule已更新，新版本子集 ${env.COMMIT_ID} 已添加"
+                    } else {
+                        echo "子集版本 ${env.COMMIT_ID} 已存在，无需更新"
+                    }
+                }
             }
         }
-        
-        /* 更新VirtureService，更新灰度版本标识 destination.subset */
-        stage('Update VirtureService') {
-            steps {
-                sh "sed -i 's/\${TAG}/${IMAGE_TAG}/g' VirtureService.yaml"
-                sh "kubectl apply -f VirtureService.yaml"
-            }
-        }
-        
-        /* 研发在kiali进行流量染色和手动切量 */
 
     }
-    
+
     post {
         failure {
             echo 'Pipeline failed'
