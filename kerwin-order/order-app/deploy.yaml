@@ -28,11 +28,11 @@ spec:
             - containerPort: 7100
           resources:
             requests:
-              memory: "512Mi"
-              cpu: "300m"
-            limits:
-              memory: "1500Mi"
+              memory: "1024Mi"
               cpu: "500m"
+            limits:
+              memory: "2048Mi"
+              cpu: "1000m"
           env:  # 如果需要环境变量，可以在这里添加
             - name: JAVA_OPTS
               value: -XX:+UseContainerSupport -XX:MaxRAMPercentage=75.0
@@ -43,7 +43,7 @@ spec:
             httpGet:
               path: /actuator/health
               port: 7100
-            initialDelaySeconds: 10
+            initialDelaySeconds: 30
             periodSeconds: 5
             timeoutSeconds: 3
             failureThreshold: 10
